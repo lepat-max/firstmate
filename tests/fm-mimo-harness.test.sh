@@ -53,8 +53,18 @@ TMP_ROOT=$(fm_test_tmproot fm-mimo-harness)
 # --- Detection --------------------------------------------------------------
 
 test_mimo_marker_detects_the_live_session() {
-  local out
-  out=$(unset MIMOCODE; MIMOCODE=1 "$HARNESS")
+  local fakebin out
+  # The real ancestry walk from inside another harness (e.g. a pi session) finds
+  # a nearer comm ancestor of a different family, and detect_own lets comm
+  # strength outrank the marker. A fake ps reporting no harness ancestors
+  # isolates the marker half of the verdict.
+  fakebin=$(fm_fakebin "$TMP_ROOT/marker-no-ancestry")
+  cat > "$fakebin/ps" <<'SH'
+#!/usr/bin/env bash
+exit 1
+SH
+  chmod +x "$fakebin/ps"
+  out=$(unset MIMOCODE; MIMOCODE=1 PATH="$fakebin:$PATH" "$HARNESS")
   [ "$out" = mimo ] \
     || fail "MIMOCODE=1 must claim the mimo identity, got '$out'"
   pass "fm-harness.sh: the MIMOCODE marker claims the mimo identity"
@@ -354,13 +364,14 @@ BASE_PATH=${FM_TEST_BASE_PATH:-$NODE_BIN_DIR:/usr/bin:/bin:/usr/sbin:/sbin}
 run_mimo_spawn() {
   local case_dir=$1 home=$2 proj=$3 wt=$4 fakebin=$5 id=$6
   shift 6
+  local base_path=${FM_TEST_MIMO_BASE_PATH:-$BASE_PATH}
   HOME="$home" FM_ROOT_OVERRIDE='' FM_HOME="$home" \
     FM_STATE_OVERRIDE="$home/state" FM_DATA_OVERRIDE="$home/data" \
     FM_PROJECTS_OVERRIDE="$home/projects" FM_CONFIG_OVERRIDE="$home/config" \
     FM_SPAWN_NO_GUARD=1 FM_FAKE_PANE_PATH="$wt" TMUX="fake,1,0" \
     FM_FAKE_LAUNCH_LOG="$case_dir/launch.log" \
     FM_FAKE_TMUX_CALL_LOG="$case_dir/tmux-calls.log" \
-    PATH="$fakebin:$BASE_PATH" \
+    PATH="$fakebin:$base_path" \
     "$SPAWN" "$id" "$proj" --harness mimo --mode no-mistakes --yolo off "$@" 2>&1
 }
 
@@ -446,16 +457,11 @@ test_mimo_missing_executable_refuses_before_the_pane() {
   home="$case_dir/home"
   proj="$case_dir/project"
   wt="$case_dir/wt"
-  # A fakebin with the tmux stubs but NO mimo executable, so the resolution
-  # must refuse before any pane is created.
-  fakebin=$(fm_fakebin "$case_dir/fake")
-  cat > "$fakebin/tmux" <<'SH'
-#!/usr/bin/env bash
-printf '%s\n' "$*" >> /dev/null
-exit 0
-SH
-  chmod +x "$fakebin/tmux"
-  fm_fake_exit0 "$fakebin" treehouse gh-axi gh
+  # The shared fakebin has the tmux stubs the spawn flow polls; removing its
+  # mimo executable leaves the resolution nothing to find, so it must refuse
+  # before any pane is created.
+  fakebin=$(make_mimo_fakebin "$case_dir/fake")
+  rm "$fakebin/mimo"
   mkdir -p "$home/data/$id" "$home/projects" "$home/state" "$home/config"
   cat > "$home/data/$id/brief.md" <<'EOF'
 # Task
@@ -467,14 +473,16 @@ Verify the missing-executable refusal.
 EOF
   printf 'mimo\n' > "$home/config/crew-harness"
   fm_git_worktree "$proj" "$wt" "wt-nobin"
+  # The host resolves node from the same bin dir a live mimo install occupies,
+  # so a bare PATH would find the real mimo. A symlink farm carrying node alone
+  # keeps the spawn's node use working while the mimo resolution stays missing.
+  local node_only="$case_dir/node-only"
+  mkdir -p "$node_only"
+  ln -sf "$NODE_BIN" "$node_only/node"
   touch "$home/state/.last-watcher-beat"
   rc=0
-  out=$(HOME="$home" FM_ROOT_OVERRIDE='' FM_HOME="$home" \
-    FM_STATE_OVERRIDE="$home/state" FM_DATA_OVERRIDE="$home/data" \
-    FM_PROJECTS_OVERRIDE="$home/projects" FM_CONFIG_OVERRIDE="$home/config" \
-    FM_SPAWN_NO_GUARD=1 FM_FAKE_PANE_PATH="$wt" TMUX="fake,1,0" \
-    PATH="$fakebin:$BASE_PATH" \
-    "$SPAWN" "$id" "$proj" --harness mimo --mode no-mistakes --yolo off 2>&1) || rc=$?
+  out=$(FM_TEST_MIMO_BASE_PATH="$node_only:/usr/bin:/bin:/usr/sbin:/sbin" \
+    run_mimo_spawn "$CASE_DIR" "$home" "$proj" "$wt" "$fakebin" "$id") || rc=$?
   [ "$rc" -ne 0 ] || fail "a spawn naming an unresolvable mimo must be refused"
   assert_contains "$out" "mimo executable not found on PATH" \
     "the missing-executable refusal lacked its concrete reason"

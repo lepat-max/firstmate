@@ -2852,7 +2852,7 @@ launch_template() {
   # worker's config, the same permission-only launch OpenCode's grant gives.
   # Foreign markers are cleared at the boundary as defense in depth; mimo
   # establishes MIMOCODE=1 itself.
-  mimo) printf '%s' 'env -u CLAUDECODE -u PI_CODING_AGENT -u GROK_AGENT -u FM_PI_HARNESS -u FM_OMP_HARNESS -u GEMINI_CLI -u CURSOR_AGENT -u CURSOR_INVOKED_AS -u ATLASSIAN_AGENT_TYPE -u ROVODEV_CLI -u AGENT MIMOCODE_PERMISSION='\''"allow"'\'' __MIMOBIN__ __MODELFLAG__--prompt "$(__OPINPUT__ encode launch-brief < __BRIEF__)"' ;;
+  mimo) printf '%s' 'env -u CLAUDECODE -u PI_CODING_AGENT -u GROK_AGENT -u FM_PI_HARNESS -u FM_OMP_HARNESS -u GEMINI_CLI -u CURSOR_AGENT -u CURSOR_INVOKED_AS -u ATLASSIAN_AGENT_TYPE -u ROVODEV_CLI -u AGENT -u OPENCODE_CONFIG_CONTENT -u OPENCODECONFIG MIMOCODE_PERMISSION='\''"allow"'\'' __MIMOBIN__ __MODELFLAG__--prompt "$(__OPINPUT__ encode launch-brief < __BRIEF__)"' ;;
   pi | pi-signed)
     printf '%s' '__PIBIN____PITUIMODE____PIAPPROVE____PIEXCLUDE____PIRESUME__'
     if [ "$kind" = secondmate ]; then
@@ -3735,7 +3735,8 @@ effort_flag_for_harness() {
     # mimo's interactive `mimo --prompt` launch has no effort flag on
     # 0.1.15 (`mimo run --variant` is a different, non-interactive mode),
     # so every effort level is recorded in task metadata and omitted from
-    # the launch (record-and-omit, as codex and grok do).
+    # the launch (record-and-omit, unlike codex and grok, which pass
+    # supported effort flags and omit only unsupported levels).
     ;;
   esac
 }
