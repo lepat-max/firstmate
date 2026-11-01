@@ -107,12 +107,15 @@ else
   fi
 fi
 
-if ! command -v actionlint >/dev/null 2>&1; then
-  printf 'fm-lint-workflows.sh: actionlint not found; install actionlint %s with bin/fm-install-actionlint.sh <destination-directory> and put that directory on PATH.\n' \
+if command -v actionlint >/dev/null 2>&1; then
+  ACTIONLINT_BIN=$(command -v actionlint)
+elif [ -x "$ROOT/.tools/actionlint/actionlint" ]; then
+  ACTIONLINT_BIN="$ROOT/.tools/actionlint/actionlint"
+else
+  printf 'fm-lint-workflows.sh: actionlint not found; install actionlint %s with bin/fm-install-actionlint.sh .tools/actionlint (repo-local, gitignored) or another destination-directory and put that directory on PATH.\n' \
     "$REQUIRED_ACTIONLINT" >&2
   exit 1
 fi
-ACTIONLINT_BIN=$(command -v actionlint)
 resolved=$("$ACTIONLINT_BIN" -version | awk 'NR==1 {print; exit}')
 printf 'fm-lint-workflows.sh: actionlint %s (pinned %s)\n' "$resolved" "$REQUIRED_ACTIONLINT" >&2
 if [ "$resolved" != "$REQUIRED_ACTIONLINT" ]; then
