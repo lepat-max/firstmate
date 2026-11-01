@@ -98,7 +98,8 @@ A new tool remains undispatchable until the `verify` plan, its harness entry, ev
     "commandcode": "references/harness/commandcode.md",
     "polytoken": "references/harness/polytoken.md",
     "cortex": "references/harness/cortex.md",
-    "kiro": "references/harness/kiro.md"
+    "kiro": "references/harness/kiro.md",
+    "mimo": "references/harness/mimo.md"
   }
 }
 ```

@@ -63,6 +63,11 @@ fm_agent_process_classify_name() {  # <path> [argv0] -> agent|shell|other
     # #{pane_current_command} both read kiro-cli), and a glob would claim
     # unrelated commands containing that fragment.
     kiro-cli) printf 'agent' ;;
+    # mimo (MiMoCode, an OpenCode fork) is anchored for the same reason: the
+    # pane foreground is either the `mimo` node launcher or the Bun-compiled
+    # agent binary whose comm is `.mimocode` (verified, mimo 0.1.15), and a
+    # `*mimo*` glob would claim unrelated commands such as mimosa.
+    mimo|.mimocode) printf 'agent' ;;
     zsh|bash|sh|dash|ash|ksh|mksh|tcsh|csh|fish) printf 'shell' ;;
     *)
       if fm_harness_path_name "$path" >/dev/null || fm_harness_path_name "$argv0" >/dev/null; then

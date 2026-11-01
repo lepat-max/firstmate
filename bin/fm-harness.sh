@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Detect the agent harness this process tree runs on.
-# Usage: fm-harness.sh                  print own harness: claude|codex|opencode|pi|pi-signed|grok|kimi|cursor|gemini|muse|rovo|omp|agy|devin|commandcode|polytoken|cortex|kiro|unknown
+# Usage: fm-harness.sh                  print own harness: claude|codex|opencode|pi|pi-signed|grok|kimi|cursor|gemini|muse|rovo|omp|agy|devin|commandcode|polytoken|cortex|kiro|mimo|unknown
 #        fm-harness.sh crew             print the effective CREWMATE harness
 #                                        (config/crew-harness; "default" resolves to own)
 #        fm-harness.sh secondmate [id]  print the harness the PRIMARY uses to launch
@@ -131,6 +131,16 @@ harness_marker() {
     echo omp
     return
   fi
+  # MiMoCode (an OpenCode fork) sets MIMOCODE=1 on its own process and every
+  # child/tool process it spawns (verified live on mimo 0.1.15: the bash tool
+  # of a live session reported MIMOCODE=1 and no CLAUDECODE). It is checked
+  # BEFORE the CLAUDECODE line for exactly the reason cursor and gemini are:
+  # MiMoCode imports Claude-compatible settings and does not scrub an
+  # inherited CLAUDECODE, so a mimo worker launched from a claude primary
+  # carries both markers and the mimo identity must win. A nearer claude
+  # ancestor still outranks in detect_own through comm strength; bin/fm-spawn.sh
+  # additionally clears foreign markers at the launch boundary.
+  [ "${MIMOCODE:-}" = "1" ] && { echo mimo; return; }
   [ "${CLAUDECODE:-}" = "1" ] && { echo claude; return; }
   if [ "${PI_CODING_AGENT:-}" = "true" ]; then
     if [ "${FM_PI_HARNESS:-}" = pi-signed ]; then echo pi-signed; else echo pi; fi
@@ -278,6 +288,11 @@ harness_process_verdict() {  # <pid>
     # crewmate/scout adapter only and is never a primary or secondmate, so
     # this arm only lets a kiro crewmate identify its own harness.
     kiro-cli) echo "comm kiro"; return ;;
+    # mimo (MiMoCode, an OpenCode fork) ships as a Bun-compiled single binary
+    # whose agent process is `.mimocode` and whose launcher is a node script
+    # named `mimo` (verified, mimo 0.1.15). Anchored, never *mimo*, so
+    # mimosa and similar unrelated commands are not misread as this harness.
+    mimo|mimocode|.mimocode) echo "comm mimo"; return ;;
     node*|python*)
       # Bare interpreter: match the harness name in its script path.
       args=$(ps -o args= -p "$pid" 2>/dev/null)
@@ -291,6 +306,11 @@ harness_process_verdict() {  # <pid>
         *opencode*) echo "args opencode"; return ;;
         *grok*) echo "args grok"; return ;;
         *" pi "*|*/pi) echo "args pi"; return ;;
+        # mimo's launcher is a node script reached through PATH, so its args
+        # end with /mimo or carry the harness name as the script path followed
+        # by arguments (verified, mimo 0.1.15: `node <nvm-bin-dir>/mimo`).
+        # Anchored to the script-path boundary, never *mimo*.
+        */mimo|*/mimo\ *) echo "args mimo"; return ;;
       esac ;;
   esac
 }
@@ -436,7 +456,7 @@ supervision_primary_pin() {
   local pin=${FM_SUPERVISION_PRIMARY_HARNESS:-}
   [ "${FM_SUPERVISION_ACTOR:-}" = branch ] && [ -n "$pin" ] || return 0
   case "$pin" in
-    claude|codex|opencode|pi|pi-signed|grok|kimi|cursor|gemini|muse|rovo|omp|agy|devin|commandcode|polytoken|cortex)
+    claude|codex|opencode|pi|pi-signed|grok|kimi|cursor|gemini|muse|rovo|omp|agy|devin|commandcode|polytoken|cortex|mimo)
       printf '%s\n' "$pin"
       ;;
     *)

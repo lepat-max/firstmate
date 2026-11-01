@@ -1279,6 +1279,11 @@ It has no primary or secondmate supervision protocol.
 The launch generates a private per-task config directory that mirrors the operator's provider/model configuration and enforces unattended permissions without modifying global configuration.
 The first-start license dialog requires an operator decision and is never accepted automatically.
 
+mimo (MiMoCode) is verified for crewmate and scout launches only; a secondmate is refused because MiMoCode has no verified primary supervision protocol.
+[Its adapter reference](../.agents/skills/harness-adapters/references/harness/mimo.md) owns the operating contract and [verification record](verification/mimo.md) owns the live evidence.
+The launch grants the env allow-all through `MIMOCODE_PERMISSION`, carries the brief with `--prompt`, and clears every foreign harness marker at the boundary, so no user or project MiMoCode config is edited.
+It publishes no hook surface on the verified version, so the busy contract is never armed for it and the pane runtime's native verdict is the only classification evidence on the backends that provide one; the interrupt key is refused until one is verified against a live pane.
+
 ### Verification and primary supervision
 
 New harnesses get verified through a supervised trial task before joining the set.
@@ -1855,7 +1860,7 @@ Typed resolution additively recognizes `gemini` because AGENTS.md section 4 veri
 | Harness | Provider declaration on the opted-in resolver path |
 | --- | --- |
 | `claude`, `codex`, `grok`, `kimi`, `cursor`, `agy`, `muse` | The resolver has an authoritative single-provider mapping. |
-| Every other verified harness | Must declare `provider` explicitly; this includes multi-provider `pi`, `pi-signed`, `omp`, and `opencode`, and unmapped `gemini`, `rovo`, `devin`, `commandcode`, `cortex`, and `kiro`; omission is an actionable configuration error before any request. |
+| Every other verified harness | Must declare `provider` explicitly; this includes multi-provider `pi`, `pi-signed`, `omp`, and `opencode`, and unmapped `gemini`, `rovo`, `devin`, `commandcode`, `cortex`, `kiro`, and `mimo`; omission is an actionable configuration error before any request. |
 
 This single-provider table is separate from the frozen legacy mapping used by `fm-quota-choose.sh`, so additions cannot alter no-key routing.
 

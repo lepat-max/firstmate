@@ -56,7 +56,7 @@
 #                    unknown invalidation fm-control writes after a Devin interrupt
 #   fm-recovery      a documented recovery reset after relaunch
 # Classifier-only sources (never written into a record):
-#   endpoint-gone, herdr-native, rex-native, t3code-native, tern-native, grok-regex, rovo-regex, agy-regex, muse-session-log,
+#   endpoint-gone, herdr-native, rex-native, t3code-native, tern-native, mimo-native, grok-regex, rovo-regex, agy-regex, muse-session-log,
 #   cursor-transcript, missing, malformed, gen-mismatch, source-mismatch,
 #   kimi-unverified, codex-unverified, capture-failed, no-target, launch-prompt
 #
@@ -81,7 +81,8 @@
 #      keeps its ordinary busy verdict and the general BUSY_TURN_MAX_SECS
 #      bound is unchanged.
 #   5. no record at all: a native busy verdict from herdr, rex, or tern is trusted as busy
-#      (generation state is sufficient for busy, not for idle), then the
+#      (generation state is sufficient for busy, not for idle; mimo alone also
+#      trusts a native idle verdict, having no semantic source of its own), then the
 #      muse session-log and cursor transcript pull sources, then the
 #      Grok/Rovo/AGY temporary regex fallbacks classify a grok, rovo, or agy
 #      task from its rendered tail, then unknown missing
@@ -1197,13 +1198,22 @@ fm_busy_classify() {  # <backend> <target> <harness> <id> <state-dir> [tail40]
   # enough to trust for BUSY (streaming means a turn is running; rex trusts an
   # OSC 7501 working record only while its reporting process is still in the
   # block's foreground chain); native idle is narrower than turn state (a long
-  # foreground tool call reads idle) and stays unknown here.
+  # foreground tool call reads idle) and stays unknown here for every harness
+  # except mimo, which trusts it alone (below).
   case "$backend" in
     herdr|rex|tern)
       if command -v fm_backend_busy_state >/dev/null 2>&1; then
         native=$(fm_backend_busy_state "$backend" "$target" 2>/dev/null || true)
         if [ "$native" = busy ]; then
           printf 'busy %s-native' "$backend"
+          return 0
+        fi
+        # mimo has no semantic busy source of its own (no turn-end hooks, no
+        # run record), so the pane runtime's definitive agent state is the
+        # only evidence available; native idle is trusted for that harness
+        # alone, where the fallback would otherwise stay unknown forever.
+        if [ "$native" = idle ] && [ "$harness" = mimo ]; then
+          printf 'idle mimo-native'
           return 0
         fi
       fi

@@ -12,6 +12,12 @@ Verified on 2026-10-14 with Polytoken 0.9.0 on macOS arm64 using the tmux worker
 [Polytoken verification](polytoken.md) owns the commands, session-model proof, and lifecycle output; its credentialed live guard refreshes the evidence.
 This does not verify a Polytoken primary, secondmate, or native Herdr pane.
 
+## MiMoCode worker lifecycle
+
+Verified on 2026-10-12 with MiMoCode 0.1.15 on macOS, with the fleet-lock and native-idle evidence refreshed 2026-10-15 and 2026-10-31.
+[MiMoCode verification](mimo.md) owns the detection precedence, launch contract, control mechanics, and busy classification; the portable regression is the only guard, because the adapter depends on no vendor-rendered surface.
+This does not verify a MiMoCode primary supervision protocol, secondmate, or live spawned-pane signals.
+
 ## Harness detection precedence
 
 Firstmate's own harness comes from two kinds of evidence, and `bin/fm-harness.sh` owns how they combine: an environment marker names its harness, and the nearest harness process in the parent chain proves who owns the process tree.
