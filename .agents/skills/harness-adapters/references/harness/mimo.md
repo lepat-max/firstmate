@@ -14,7 +14,7 @@ The router owns the crewmate/scout-only boundary; primary and secondmate integra
 | Skill invocation | Not verified beyond ordinary slash-command behavior; use natural language when the exact command is uncertain. |
 | Resume | Not verified. Relaunch uses the brief on disk as its durable instruction, not a mimo session reference. |
 | Model flag | `-m, --model <provider/model>`. |
-| Effort flag | None for Firstmate's interactive `mimo --prompt` launch; `mimo run --variant` is a different, non-interactive mode. The effort is recorded in task metadata and omitted from the launch (record-and-omit, as codex and grok do). |
+| Effort flag | None for Firstmate's interactive `mimo --prompt` launch; `mimo run --variant` is a different, non-interactive mode. The effort is recorded in task metadata and omitted from the launch (record-and-omit; unlike codex and grok, which pass supported effort flags and omit only unsupported levels). |
 | Model discovery | Run `mimo models [provider]` to list available provider/model identifiers. |
 | Trust dialog | None documented. Not yet proven against a live spawned pane; the first live spawn on this adapter is the check. |
 | Marker | `MIMOCODE=1` on the mimo process and every child/tool process (verified live). The agent binary is `.mimocode`; the launcher is a node script named `mimo`, identified from ancestry at comm strength. |

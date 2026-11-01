@@ -364,7 +364,7 @@ BASE_PATH=${FM_TEST_BASE_PATH:-$NODE_BIN_DIR:/usr/bin:/bin:/usr/sbin:/sbin}
 run_mimo_spawn() {
   local case_dir=$1 home=$2 proj=$3 wt=$4 fakebin=$5 id=$6
   shift 6
-  local base_path=${FM_TEST_MIMO_BASE_PATH:-$BASE_PATH}
+  local base_path=${FM_TEST_BASE_PATH:-$BASE_PATH}
   HOME="$home" FM_ROOT_OVERRIDE='' FM_HOME="$home" \
     FM_STATE_OVERRIDE="$home/state" FM_DATA_OVERRIDE="$home/data" \
     FM_PROJECTS_OVERRIDE="$home/projects" FM_CONFIG_OVERRIDE="$home/config" \
@@ -481,7 +481,7 @@ EOF
   ln -sf "$NODE_BIN" "$node_only/node"
   touch "$home/state/.last-watcher-beat"
   rc=0
-  out=$(FM_TEST_MIMO_BASE_PATH="$node_only:/usr/bin:/bin:/usr/sbin:/sbin" \
+  out=$(FM_TEST_BASE_PATH="$node_only:/usr/bin:/bin:/usr/sbin:/sbin" \
     run_mimo_spawn "$CASE_DIR" "$home" "$proj" "$wt" "$fakebin" "$id") || rc=$?
   [ "$rc" -ne 0 ] || fail "a spawn naming an unresolvable mimo must be refused"
   assert_contains "$out" "mimo executable not found on PATH" \
