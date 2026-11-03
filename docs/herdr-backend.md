@@ -753,7 +753,7 @@ The adapter's own composer reads are exempt because they read the visible viewpo
 
 Herdr's native agent state can read idle while a harness waits on its own long foreground tool.
 The shared crew-state path therefore accepts a native `busy` as evidence of activity.
-It never accepts a native `idle` as evidence that a worker has stopped; the task's own semantic busy state (`bin/fm-busy-lib.sh`) decides that.
+It never accepts a native `idle` as evidence that a worker has stopped for any adapter except MiMoCode, which publishes no semantic busy source of its own, so its native idle verdict is the only evidence available ([mimo verification](verification/mimo.md)); for every other adapter, the task's own semantic busy state (`bin/fm-busy-lib.sh`) decides that.
 A human-blocked permission dialog has no busy banner and still surfaces.
 
 ## Composer and injection safety
