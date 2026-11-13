@@ -113,6 +113,29 @@ A single-process harness has no descendant that adds a distinct verdict, which i
 The portable regression pins every half without any harness installed: `tests/fm-harness-precedence.test.sh` asserts that this two-process topology decides at comm strength, that the descent probe reaches a strength the top-of-session probe cannot, that a sibling branch answering a foreign harness contributes no verdict, that a foreign args-only verdict at the deepest vantage leaves the comm-strength identity intact, and that equal-depth ties choose the comm-strength leaf regardless of process ordering.
 The run did not reach `opencode`, `pi`, `pi-signed`, `grok`, `kimi`, or `muse`, which were not installed, and stopped at the same pre-existing liveness failure for `cursor` 3.18.9, whose resolved binary on that machine is the editor rather than `cursor-agent`; those adapters are unverified by this run.
 
+
+### A real MiMoCode session as the primary
+
+Verified on 2026-10-12 with mimo 0.1.15 on macOS, running inside a live MiMoCode session whose cwd is the firstmate home.
+The tool subprocess environment carried `MIMOCODE=1` and no `CLAUDECODE`, and the parent chain was the agent binary at comm `.mimocode` above a node launcher whose args end with `/nvm-bin-dir/mimo`:
+
+```sh
+bin/fm-harness.sh; bin/fm-harness.sh crew; bin/fm-harness.sh ancestry
+```
+
+Observed output:
+
+```text
+mimo
+mimo
+comm mimo
+```
+
+The marker and the comm-strength ancestry agree, so both halves are live-verified.
+The branch pin resolves for `mimo`: `FM_SUPERVISION_ACTOR=branch FM_SUPERVISION_PRIMARY_HARNESS=mimo bin/fm-harness.sh` reports `mimo`.
+The portable regression `tests/fm-mimo-harness.test.sh` pins the marker, both ancestry shapes, the fragment negatives, the comm-strength precedence over a retained `CLAUDECODE`, the launch shape with the object-form permission allow-all `MIMOCODE_PERMISSION='{"*":"allow"}'` plus `MIMOCODE_AUTO_APPROVE_DELETE=1` and `MIMOCODE_SKIP_ALL_FORCED_ASK_TIMEOUT_MS=60000` (the bare-string `'"allow"'` form is destroyed by mimo 0.1.16's recursive deep-merge and never applies the allow-all), the effort record-and-omit, the secondmate refusal, and the absent busy wiring.
+Not verified on this adapter: a live spawned pane (trust dialog, ready signal, submit shape), the interrupt key, a resume form, and any semantic busy source; the reference records those as pending.
+
 ## tmux
 
 Foreground-process behavior was verified on 2026-07-07 with tmux 3.6a on macOS.
