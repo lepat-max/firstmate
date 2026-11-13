@@ -1211,6 +1211,14 @@ fm_busy_classify() {  # <backend> <target> <harness> <id> <state-dir> [tail40]
           printf 'busy %s-native' "$backend"
           return 0
         fi
+        # mimo has no semantic busy source of its own (no turn-end hooks, no
+        # run record), so the pane runtime's definitive agent state is the
+        # only evidence available; native idle is trusted for that harness
+        # alone, where the fallback would otherwise stay unknown forever.
+        if [ "$native" = idle ] && [ "$harness" = mimo ]; then
+          printf 'idle mimo-native'
+          return 0
+        fi
       fi
       ;;
   esac

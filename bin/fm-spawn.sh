@@ -259,7 +259,7 @@
 #   profile consultation. A --secondmate spawn is exempt and resolves the SECONDMATE
 #   harness (config/secondmate-harness -> config/crew-harness -> own), so the
 #   secondmate-vs-crewmate split is DURABLE across every respawn (recovery,
-#   /updatefirstmate, restart). A bare adapter name (claude|codex|opencode|pi|pi-signed|grok|kimi|cursor|gemini|muse|rovo|omp|agy|devin|commandcode|cortex|kiro)
+#   /updatefirstmate, restart). A bare adapter name (claude|codex|opencode|pi|pi-signed|grok|kimi|cursor|gemini|muse|rovo|omp|agy|devin|commandcode|cortex|kiro|mimo)
 #   overrides it for this spawn (either kind). A non-flag string containing
 #   whitespace is treated as a RAW launch command - the escape hatch for verifying
 #   new adapters. For pi and pi-signed, fm-spawn resolves the selected executable
@@ -2973,6 +2973,24 @@ launch_template() {
     fi
     ;;
   opencode) printf '%s' 'OPENCODE_CONFIG_CONTENT='\''{"permission":{"*":"allow"}__EFFORTFLAG__}'\'' __OPENCODEBIN__ __MODELFLAG__--prompt "$(__OPINPUT__ encode launch-brief < __BRIEF__)"' ;;
+  # mimo (MiMoCode, an OpenCode fork) has no OPENCODE_CONFIG_CONTENT analog
+  # for config content, but its own permission surface accepts MIMOCODE_PERMISSION
+  # as the env allow-all: it injects the base UNDER the worker's config, the
+  # same permission-only launch OpenCode's grant gives. mimo 0.1.16 regression:
+  # the bare string '"allow"' is fed to a recursive deep-merge that explodes it
+  # into junk character keys ("0":"a","1":"l",...), so the allow-all never
+  # applies and every outside-worktree touch raises the standard permission
+  # picker. The object form '{"*":"allow"}' merges correctly (live-verified
+  # 2026-11-08: external read succeeds with no ask). MIMOCODE_AUTO_APPROVE_DELETE=1
+  # clears the bash_delete forced-ask, which prompts even under the allow-all
+  # (delete detection on disposable-worktree panes, consistent with the
+  # already-allowed bash surface); MIMOCODE_SKIP_ALL_FORCED_ASK_TIMEOUT_MS=60000
+  # auto-rejects any unexpected ask after 60s instead of parking the pane.
+  # Re-verify on any mimo version bump: the allow-all regressed silently
+  # between 0.1.15 and 0.1.16.
+  # Foreign markers are cleared at the boundary as defense in depth; mimo
+  # establishes MIMOCODE=1 itself.
+  mimo) printf '%s' 'env -u CLAUDECODE -u PI_CODING_AGENT -u GROK_AGENT -u FM_PI_HARNESS -u GEMINI_CLI -u CURSOR_AGENT -u CURSOR_INVOKED_AS MIMOCODE_PERMISSION='\''{"*":"allow","external_directory":{"*":"allow"}}'\'' MIMOCODE_AUTO_APPROVE_DELETE=1 MIMOCODE_SKIP_ALL_FORCED_ASK_TIMEOUT_MS=60000 mimo __MODELFLAG__--prompt "$(__OPINPUT__ encode launch-brief < __BRIEF__)"' ;;
   pi | pi-signed)
     printf '%s' '__PIBIN____PITUIMODE____PIAPPROVE____PIEXCLUDE____PIRESUME__'
     if [ "$kind" = secondmate ]; then
@@ -3304,7 +3322,11 @@ fi
 # kiro has none either: this task verified only crewmate-side launch, busy state,
 # interrupt, exit, and resume on the V2 engine, and docs/supervision-protocols/
 # carries no kiro wake protocol (kiro-cli 2.21.4).
-if [ "$KIND" = secondmate ] && { [ "$HARNESS" = muse ] || [ "$HARNESS" = gemini ] || [ "$HARNESS" = devin ] || [ "$HARNESS" = commandcode ] || [ "$HARNESS" = polytoken ] || [ "$HARNESS" = cortex ] || [ "$HARNESS" = kiro ] || [ "$HARNESS" = hermes ]; }; then
+# mimo is in the same class: the OpenCode fork drops opencode's plugin event
+# surface (no session.idle or tool.execute.before on mimo 0.1.15) and carries
+# no verified hook surface of its own, so its turn-end supervision is
+# unverified and no mimo wake protocol exists.
+if [ "$KIND" = secondmate ] && { [ "$HARNESS" = muse ] || [ "$HARNESS" = gemini ] || [ "$HARNESS" = devin ] || [ "$HARNESS" = commandcode ] || [ "$HARNESS" = polytoken ] || [ "$HARNESS" = cortex ] || [ "$HARNESS" = kiro ] || [ "$HARNESS" = hermes ] || [ "$HARNESS" = mimo ]; }; then
   echo "error: $HARNESS is a verified crewmate/scout adapter only and cannot run a secondmate; it has no primary supervision protocol. Select a harness verified for secondmates." >&2
   exit 1
 fi
@@ -3750,7 +3772,7 @@ model_flag_for_harness() {
     [ "$oc_major" = 1 ] || return 0
     printf -- '--model %s ' "$(shell_quote "$model")"
     ;;
-  claude | codex | pi | pi-signed | grok | kimi | cursor | gemini | muse | rovo | omp | agy | devin | commandcode | cortex | kiro)
+  claude | codex | pi | pi-signed | grok | kimi | cursor | gemini | muse | rovo | omp | agy | devin | commandcode | cortex | kiro | mimo)
     printf -- '--model %s ' "$(shell_quote "$model")"
     ;;
   # polytoken encodes reasoning effort inside the model reference, so the
@@ -3881,6 +3903,12 @@ effort_flag_for_harness() {
     else
       printf ',"model":"%s","agent":{"build":{"model":"%s"%s}}' "$model_json" "$model_json" "$variant_fragment"
     fi
+    ;;
+  mimo)
+    # mimo's interactive `mimo --prompt` launch has no effort flag on
+    # 0.1.15 (`mimo run --variant` is a different, non-interactive mode),
+    # so every effort level is recorded in task metadata and omitted from
+    # the launch (record-and-omit, as codex and grok do).
     ;;
   muse)
     # muse 0.1.0-R708.1 --reasoning-effort accepts none|minimal|low|medium|
