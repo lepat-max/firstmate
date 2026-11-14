@@ -3000,11 +3000,15 @@ launch_template() {
   # (delete detection on disposable-worktree panes, consistent with the
   # already-allowed bash surface); MIMOCODE_SKIP_ALL_FORCED_ASK_TIMEOUT_MS=60000
   # auto-rejects any unexpected ask after 60s instead of parking the pane.
+  # The workspace-trust prompt renders on a first launch in a never-opened
+  # directory (mimo 0.1.17, live-verified 2026-11-14) and parks an unattended
+  # worker, so --trust skips it for every crewmate/scout launch; interactive
+  # mimo sessions a human opens are not composed here and keep the dialog.
   # Re-verify on any mimo version bump: the allow-all regressed silently
   # between 0.1.15 and 0.1.16.
   # Foreign markers are cleared at the boundary as defense in depth; mimo
   # establishes MIMOCODE=1 itself.
-  mimo) printf '%s' 'env -u CLAUDECODE -u PI_CODING_AGENT -u GROK_AGENT -u FM_PI_HARNESS -u GEMINI_CLI -u CURSOR_AGENT -u CURSOR_INVOKED_AS MIMOCODE_PERMISSION='\''{"*":"allow","external_directory":{"*":"allow"}}'\'' MIMOCODE_AUTO_APPROVE_DELETE=1 MIMOCODE_SKIP_ALL_FORCED_ASK_TIMEOUT_MS=60000 mimo __MODELFLAG__--prompt "$(__OPINPUT__ encode launch-brief < __BRIEF__)"' ;;
+  mimo) printf '%s' 'env -u CLAUDECODE -u PI_CODING_AGENT -u GROK_AGENT -u FM_PI_HARNESS -u GEMINI_CLI -u CURSOR_AGENT -u CURSOR_INVOKED_AS MIMOCODE_PERMISSION='\''{"*":"allow","external_directory":{"*":"allow"}}'\'' MIMOCODE_AUTO_APPROVE_DELETE=1 MIMOCODE_SKIP_ALL_FORCED_ASK_TIMEOUT_MS=60000 mimo --trust __MODELFLAG__--prompt "$(__OPINPUT__ encode launch-brief < __BRIEF__)"' ;;
   pi | pi-signed)
     printf '%s' '__PIBIN____PITUIMODE____PIAPPROVE____PIEXCLUDE____PIRESUME__'
     if [ "$kind" = secondmate ]; then
