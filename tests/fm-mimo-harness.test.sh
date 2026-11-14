@@ -13,8 +13,9 @@
 #      only; unrelated commands containing the fragment must never claim the
 #      identity.
 #   3. The launch carries the brief via --prompt with MIMOCODE_PERMISSION as
-#      the env allow-all and clears foreign markers at the boundary. mimo has
-#      no effort flag on this path, so an effort is recorded and omitted.
+#      the env allow-all, passes --trust for the unattended launch, and clears
+#      foreign markers at the boundary. mimo has no effort flag on this path,
+#      so an effort is recorded and omitted.
 #   4. mimo is a crewmate/scout adapter only: a secondmate launch is refused,
 #      and nothing is armed as busy wiring because no writer could clear it.
 #   5. The documented exit command is /exit; the interrupt key is not
@@ -317,6 +318,12 @@ test_mimo_launch_carries_the_brief_with_the_permission_grant() {
   assert_not_contains "$launch" "MIMOCODE_PERMISSION='\"allow\"'" "mimo launch used the broken bare-string permission form"
   assert_contains "$launch" "MIMOCODE_AUTO_APPROVE_DELETE=1" "mimo launch omitted the bash_delete auto-approve"
   assert_contains "$launch" "MIMOCODE_SKIP_ALL_FORCED_ASK_TIMEOUT_MS=60000" "mimo launch omitted the forced-ask timeout backstop"
+  # The workspace-trust prompt renders on a first launch in a never-opened
+  # directory (mimo 0.1.17) and parks an unattended worker; every crewmate and
+  # scout launch is unattended, so --trust must be present, while the broader
+  # permission auto-approval stays with the env allow-all only.
+  assert_contains "$launch" "mimo --trust" "mimo launch did not skip the workspace-trust prompt"
+  assert_not_contains "$launch" "--dangerously-skip-permissions" "mimo launch auto-approved permissions beyond the env allow-all"
   assert_contains "$launch" "mimo " "mimo launch did not name the mimo launcher"
   assert_contains "$launch" "--prompt " "mimo launch did not carry the brief via --prompt"
   assert_contains "$launch" "--model 'xiaomi/mimo-v2.5'" "mimo launch did not carry the requested model"
