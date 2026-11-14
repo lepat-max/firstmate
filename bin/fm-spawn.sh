@@ -271,7 +271,8 @@
 #   also adds --approve when that help advertises it, so the first unattended
 #   launch does not stall on Pi's "Trust project folder?" dialog for that home
 #   path; --approve is session-scoped to the launch cwd and does not rewrite the
-#   operator's trust.json. Ordinary Pi worker launches never receive --approve.
+#   operator's trust.json. Every Pi launch (crewmate or secondmate) receives
+#   --approve when advertised (trusted-space posture, captain ruling 2026-11-08).
 #   A missing selected executable refuses before endpoint creation, and pi-signed
 #   never falls back to pi.
 #   Devin is worker-only: --permission-mode dangerous and
@@ -3421,12 +3422,14 @@ pi | pi-signed)
     PI_TUI_MODE=' --tui-mode regular'
   fi
   LAUNCH=${LAUNCH//__PITUIMODE__/$PI_TUI_MODE}
-  # Seeded-home signal is .fm-secondmate-home (required by
-  # validate_firstmate_home_for_spawn before any secondmate launch reaches
-  # the pane). Session-only --approve; never expand to a parent path or
-  # rewrite the operator trust store.
+  # Session-only --approve; never expand to a parent path or
+  # rewrite the operator trust store. Trusted-space posture (captain ruling
+  # 2026-11-08, harness-adapters): EVERY Firstmate Pi launch passes --approve
+  # when the executable advertises it, crewmates and secondmates alike, so an
+  # unattended worker never stalls on the project-trust dialog in a fresh
+  # worktree.
   PI_APPROVE=
-  if [ "$KIND" = secondmate ] && pi_supports_approve "$PI_BIN"; then
+  if pi_supports_approve "$PI_BIN"; then
     PI_APPROVE=' --approve'
   fi
   LAUNCH=${LAUNCH//__PIAPPROVE__/$PI_APPROVE}
