@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Detect the agent harness this process tree runs on.
-# Usage: fm-harness.sh                  print own harness: claude|codex|opencode|pi|pi-signed|grok|kimi|cursor|gemini|muse|rovo|omp|agy|devin|commandcode|polytoken|cortex|kiro|hermes|mimo|unknown
+# Usage: fm-harness.sh                  print own harness: claude|codex|opencode|pi|pi-signed|grok|kimi|cursor|gemini|muse|rovo|omp|agy|devin|commandcode|polytoken|cortex|kiro|hermes|mimo|safe-agent|unknown
 #        fm-harness.sh crew             print the effective CREWMATE harness
 #                                        (config/crew-harness; "default" resolves to own)
 #        fm-harness.sh secondmate [id]  print the harness the PRIMARY uses to launch
@@ -147,6 +147,13 @@ harness_marker() {
   # carries both markers and the mimo identity must win. A nearer claude
   # ancestor still outranks in detect_own through comm strength; bin/fm-spawn.sh
   # additionally clears foreign markers at the launch boundary.
+  # safe-agent (the OpenShell sandbox adapter) is identified by the
+  # Firstmate-OWNED launch marker the boot wrapper establishes inside the
+  # sandbox (bin/fm-safe-agent-crew-boot.sh), corroborated by the task env the
+  # driver passes at create. It is checked BEFORE the MIMOCODE line because
+  # the delegate runtime inside the sandbox is mimo, which sets MIMOCODE=1 on
+  # its own processes and would otherwise rename a safe-agent worker to mimo.
+  [ "${FM_SAFE_AGENT_HARNESS:-}" = safe-agent ] && [ -n "${SAFE_AGENT_CREW_TASK:-}" ] && { echo safe-agent; return; }
   [ "${MIMOCODE:-}" = "1" ] && { echo mimo; return; }
   [ "${CLAUDECODE:-}" = "1" ] && { echo claude; return; }
   if [ "${PI_CODING_AGENT:-}" = "true" ]; then

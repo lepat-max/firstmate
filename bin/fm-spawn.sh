@@ -606,6 +606,10 @@
 #                  generated firstmate-worker facet (the project facet layer)
 #     __KIROBIN__   resolved, kiro-verified executable for a kiro launch
 #     __KIROHOME__  firstmate-owned per-task KIRO_HOME dir (hook agent config + trust setting)
+#     __SABIN__    quoted absolute path to the safe-agent harness launch driver
+#                  (bin/fm-safe-agent-crew.sh)
+#     __TASKLABEL__ the task label (fm-<task-id>) the safe-agent driver scopes
+#                  the sandbox name and the exchange records by
 # Verified per-harness turn-end hooks are installed automatically where enabled; some live outside the worktree.
 # A --secondmate launch arms the same semantic busy contract (bin/fm-busy-lib.sh) in THIS
 # parent home for claude, opencode, pi, pi-signed, and omp, so the parent's active-turn
@@ -3010,6 +3014,16 @@ launch_template() {
   # Foreign markers are cleared at the boundary as defense in depth; mimo
   # establishes MIMOCODE=1 itself.
   mimo) printf '%s' 'env -u CLAUDECODE -u PI_CODING_AGENT -u GROK_AGENT -u FM_PI_HARNESS -u GEMINI_CLI -u CURSOR_AGENT -u CURSOR_INVOKED_AS MIMOCODE_PERMISSION='\''{"*":"allow","external_directory":{"*":"allow"}}'\'' MIMOCODE_AUTO_APPROVE_DELETE=1 MIMOCODE_SKIP_ALL_FORCED_ASK_TIMEOUT_MS=60000 mimo --trust __MODELFLAG__--prompt "$(__OPINPUT__ encode launch-brief < __BRIEF__)"' ;;
+  # safe-agent (OpenShell sandbox adapter, crewmate/scout only): the launch
+  # driver dispatches the crew into the OpenShell sandbox and then keeps the
+  # pane foreground on the streamed crew session (`sandbox exec --tty`), so
+  # the pane stays alive and readable exactly like a TUI harness pane while
+  # the crew works. The brief travels as the exchange boot record this script
+  # writes before the launch (never as a CLI argument), and steering arrives
+  # through the exchange inbox the boot wrapper drains;
+  # .agents/skills/harness-adapters/references/harness/safe-agent.md owns the
+  # adapter reference.
+  safe-agent) printf '%s' '__SABIN__ launch __TASKLABEL__ __WORKTREE__' ;;
   pi | pi-signed)
     printf '%s' '__PIBIN____PITUIMODE____PIAPPROVE____PIEXCLUDE____PIRESUME__'
     if [ "$kind" = secondmate ]; then
@@ -3345,7 +3359,11 @@ fi
 # surface (no session.idle or tool.execute.before on mimo 0.1.15) and carries
 # no verified hook surface of its own, so its turn-end supervision is
 # unverified and no mimo wake protocol exists.
-if [ "$KIND" = secondmate ] && { [ "$HARNESS" = muse ] || [ "$HARNESS" = gemini ] || [ "$HARNESS" = devin ] || [ "$HARNESS" = commandcode ] || [ "$HARNESS" = polytoken ] || [ "$HARNESS" = cortex ] || [ "$HARNESS" = kiro ] || [ "$HARNESS" = hermes ] || [ "$HARNESS" = mimo ]; }; then
+# safe-agent is in the same class: the crew runs inside an OpenShell sandbox
+# reached only through the exchange records, and docs/supervision-protocols/
+# carries no safe-agent wake protocol, so no primary supervision could be
+# armed.
+if [ "$KIND" = secondmate ] && { [ "$HARNESS" = muse ] || [ "$HARNESS" = gemini ] || [ "$HARNESS" = devin ] || [ "$HARNESS" = commandcode ] || [ "$HARNESS" = polytoken ] || [ "$HARNESS" = cortex ] || [ "$HARNESS" = kiro ] || [ "$HARNESS" = hermes ] || [ "$HARNESS" = mimo ] || [ "$HARNESS" = safe-agent ]; }; then
   echo "error: $HARNESS is a verified crewmate/scout adapter only and cannot run a secondmate; it has no primary supervision protocol. Select a harness verified for secondmates." >&2
   exit 1
 fi
@@ -3500,6 +3518,26 @@ polytoken)
     echo "error: polytoken executable not found; install Polytoken CLI or select a different verified harness" >&2
     exit 1
   }
+  ;;
+safe-agent)
+  # The spawn-time installation check runs through the launch driver's own
+  # verify mode, so the spawn and the pane launch can never disagree about
+  # what a usable install is (openshell CLI present, version >= 0.1.10,
+  # gateway connected). Each refusal prints its own remediation.
+  "$FM_ROOT/bin/fm-safe-agent-crew.sh" verify || {
+    echo "error: safe-agent preflight failed (the driver's refusal above names the missing requirement)" >&2
+    exit 1
+  }
+  # The delegate runtime is the sandbox image's pinned mimo; there is no
+  # per-task model or effort axis to pass.
+  if [ -n "$MODEL" ] && [ "$MODEL" != default ]; then
+    echo "error: safe-agent runs the sandbox image's pinned delegate runtime; omit --model" >&2
+    exit 1
+  fi
+  if [ -n "$EFFORT" ] && [ "$EFFORT" != default ]; then
+    echo "error: safe-agent has no per-task effort axis; omit --effort" >&2
+    exit 1
+  fi
   ;;
 esac
 
@@ -4440,6 +4478,13 @@ if [ "$KIND" = ship ] || [ "$KIND" = scout ]; then
       cat "$SOURCE_BRIEF" &&
       if [ "$KIND" = ship ] && [ "$MODE" = no-mistakes ]; then
         fm_brief_intent_overlay "$CAPTAIN_INTENT"
+      fi &&
+      if [ "$HARNESS" = safe-agent ]; then
+        # The worker runs inside the OpenShell sandbox, where every
+        # host-side path the brief names is unreachable; the overlay
+        # carries the sandboxed role mapping (exchange status/inbox, no
+        # host scripts, no pushes) and supersedes those instructions.
+        fm_brief_safe_agent_worker_overlay
       fi
   } >"$BRIEF_TMP" || {
     rm -f -- "$BRIEF_TMP"
@@ -7713,6 +7758,32 @@ polytoken)
 kiro)
   LAUNCH=${LAUNCH//__KIROBIN__/"$(shell_quote "$KIRO_BIN")"}
   LAUNCH=${LAUNCH//__KIROHOME__/"$(shell_quote "$STATE_REAL/$ID.kiro-home")"}
+  ;;
+safe-agent)
+  # The boot record carries the final launch brief (the sandboxed-worker
+  # role overlay above is already in it) as the sandbox boot prompt: line 1
+  # the UTC timestamp, line 2+ the prompt. The prompt never travels as a
+  # CLI argument, and the record is re-written on every spawn and relaunch
+  # (a resume re-attach skips the boot prompt, so the rewrite is inert
+  # there).
+  SA_EXCHANGE=$("$FM_ROOT/bin/fm-safe-agent-crew.sh" config-get EXCHANGE_ROOT) || exit 1
+  if [ -z "$SA_EXCHANGE" ]; then
+    echo "error: the safe-agent exchange root is unset; run safe-agent firstmate (the launcher's FM_HOME bootstrap) before spawning on the safe-agent harness" >&2
+    exit 1
+  fi
+  SA_BOOT_DIR="$SA_EXCHANGE/$W"
+  if ! (umask 077 && mkdir -p "$SA_BOOT_DIR/inbox"); then
+    echo "error: could not create the safe-agent exchange dir $SA_BOOT_DIR for $ID" >&2
+    exit 1
+  fi
+  SA_BOOT_STAGE="$SA_BOOT_DIR/.boot.md.$$"
+  if ! (umask 077 && { date -u '+%Y-%m-%dT%H:%M:%SZ'; cat "$BRIEF"; } >"$SA_BOOT_STAGE" && mv -f "$SA_BOOT_STAGE" "$SA_BOOT_DIR/boot.md"); then
+    rm -f "$SA_BOOT_STAGE" 2>/dev/null || true
+    echo "error: could not write the safe-agent boot record $SA_BOOT_DIR/boot.md for $ID" >&2
+    exit 1
+  fi
+  LAUNCH=${LAUNCH//__SABIN__/"$(shell_quote "$FM_ROOT/bin/fm-safe-agent-crew.sh")"}
+  LAUNCH=${LAUNCH//__TASKLABEL__/$W}
   ;;
 esac
 LAUNCH=${LAUNCH//__WORKTREE__/$sq_worktree}
