@@ -7,27 +7,12 @@ Usage: validate.py <file.pptx> [--render-dir DIR]
 3. LibreOffice headless -> PDF, page count must equal slide count.
 4. Optional PNG render of every page (pdftoppm) for visual inspection.
 """
-import re, shutil, subprocess, sys, os, tempfile
+import re, subprocess, sys, os, tempfile
 from pptx import Presentation
 
 RESIDUE_PATTERNS = [
     r"Cliquez pour modifier", r"Modifiez le style", r"Espace réservé", r"Titre 3\b",
 ]
-
-SOFFICE_CANDIDATES = [
-    "/Applications/LibreOffice.app/Contents/MacOS/soffice",
-    "/usr/bin/soffice", "/usr/local/bin/soffice",
-]
-
-
-def soffice():
-    found = shutil.which("soffice")
-    if found:
-        return found
-    for c in SOFFICE_CANDIDATES:
-        if os.path.exists(c):
-            return c
-    raise SystemExit("LibreOffice introuvable (binaire soffice)")
 
 def main(path, render_dir=None, forbid=None):
     fails = []
@@ -53,7 +38,7 @@ def main(path, render_dir=None, forbid=None):
 
     out = render_dir or tempfile.mkdtemp(prefix="pptx-validate-")
     pdf = os.path.join(out, os.path.splitext(os.path.basename(path))[0] + ".pdf")
-    r = subprocess.run([soffice(), "--headless",
+    r = subprocess.run(["/Applications/LibreOffice.app/Contents/MacOS/soffice", "--headless",
                         "--convert-to", "pdf", "--outdir", out, path],
                        capture_output=True, text=True, timeout=300)
     if not os.path.exists(pdf):

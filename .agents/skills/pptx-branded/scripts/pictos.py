@@ -1,65 +1,41 @@
 #!/usr/bin/env python3
-"""pictos.py — SVG pictogram helper (template pictos + Lucide set).
+"""pictos.py — SVG pictogram helper (template pictos + Lucide, ISC license).
 
-Subcommands:
 - `list <dir>`: inventory of SVG pictos (name, viewBox).
-- `lucide <icon-name>`: resolve (download-once, cache) a Lucide icon SVG;
-  prints the cached file path. Lucide is ISC-licensed (license notice written
-  next to the cache); it is the approved external fallback set (captain
-  decision Q1) - always prefer template pictos when one fits.
-- `insert <pptx> <slide_index> <svg_or_png|lucide:<name>> <left_in> <top_in>
-  [width_in] [--color RRGGBB]`: SVG is recolored (optional) and converted to
-  PNG (cairosvg, cached) then inserted as a raster picture. Native svgBlip
-  embedding is future work - see design report section 6.
+- `lucide fetch <name>`: download one Lucide icon SVG into the local cache
+  (unpkg lucide-static — ISC license, no attribution required).
+- `lucide search <query>`: list matching Lucide icon names (network).
+- `insert <pptx> <slide_index> <svg_or_png> <left_in> <top_in> [width_in]`:
+  SVG is converted to PNG (cairosvg, cached) then inserted as a raster picture.
+  (Native svgBlip embedding is future work — see report §6.)
+
+Priority: template pictos first (already in charte), Lucide as complement
+(captain decision Q1).
 """
-import hashlib, os, re, sys
+import hashlib, os, sys
 
 CACHE = os.path.expanduser("~/.cache/pptx-skill-pictos")
-LUCIDE_URL = "https://unpkg.com/lucide-static@latest/icons/{name}.svg"
-LUCIDE_LICENSE = "Lucide icons - ISC License - https://lucide.dev"
-
-
-def _cache_path(kind, key):
-    d = os.path.join(CACHE, kind)
-    os.makedirs(d, exist_ok=True)
-    return os.path.join(d, key)
-
+LUCIDE_CACHE = os.path.join(CACHE, "lucide")
+LUCIDE_BASE = "https://unpkg.com/lucide-static@latest/icons"
 
 def svg_to_png(svg_path, width=512, color=None):
     import cairosvg
+    os.makedirs(CACHE, exist_ok=True)
     src = svg_path
     if color:
-        svg_text = open(src, encoding="utf8").read()
-        svg_text = re.sub(r"currentColor", f"#{color}", svg_text)
-        key = hashlib.sha1((svg_path + str(width) + color).encode()).hexdigest()[:16]
-        src = _cache_path("recolor", key + ".svg")
-        with open(src, "w", encoding="utf8") as f:
-            f.write(svg_text)
+        # Lucide SVGs stroke with currentColor; bake the requested color in
+        svg = open(svg_path, encoding="utf8").read().replace("currentColor", "#" + color.lstrip("#"))
+        key = hashlib.sha1((svg + str(width)).encode()).hexdigest()[:16]
+        src = os.path.join(CACHE, key + ".svg")
+        open(src, "w", encoding="utf8").write(svg)
     key = hashlib.sha1((src + str(width)).encode()).hexdigest()[:16]
-    png = _cache_path("conv", key + ".png")
+    png = os.path.join(CACHE, key + ".png")
     if not os.path.exists(png):
         cairosvg.svg2png(url=src, write_to=png, output_width=width, output_height=width)
     return png
 
-
-def resolve_lucide(name):
-    import urllib.request
-    path = _cache_path("lucide", name + ".svg")
-    if not os.path.exists(path):
-        url = LUCIDE_URL.format(name=name)
-        with urllib.request.urlopen(url, timeout=30) as r:
-            data = r.read()
-        with open(path, "wb") as f:
-            f.write(data)
-        lic = _cache_path("lucide", "LICENSE.txt")
-        if not os.path.exists(lic):
-            with open(lic, "w", encoding="utf8") as f:
-                f.write(LUCIDE_LICENSE + "\n")
-    return path
-
-
 def list_dir(d):
-    import json
+    import json, re
     inv = []
     for f in sorted(os.listdir(d)):
         if f.endswith(".svg"):
@@ -68,12 +44,42 @@ def list_dir(d):
             inv.append({"file": f, "viewBox": m.group(1) if m else None})
     print(json.dumps(inv, indent=1))
 
+def _lucide_cache_dir():
+    os.makedirs(LUCIDE_CACHE, exist_ok=True)
+    return LUCIDE_CACHE
+
+def lucide_fetch(name):
+    import urllib.request
+    name = name.strip().lower().replace(" ", "-")
+    os.makedirs(LUCIDE_CACHE, exist_ok=True)
+    dest = os.path.join(LUCIDE_CACHE, name + ".svg")
+    if not os.path.exists(dest):
+        url = f"{LUCIDE_BASE}/{name}.svg"
+        try:
+            urllib.request.urlretrieve(url, dest)
+        except Exception as e:
+            if os.path.exists(dest):
+                os.remove(dest)
+            raise SystemExit(f"lucide fetch failed for {name!r}: {e}")
+    print(dest)
+    return dest
+
+def lucide_search(query):
+    import json, urllib.request
+    url = "https://unpkg.com/lucide-static@latest/icons/?meta"
+    try:
+        meta = json.load(urllib.request.urlopen(url))
+    except Exception as e:
+        raise SystemExit(f"lucide search failed: {e}")
+    names = sorted(e["path"].rsplit("/", 1)[-1][:-4]
+                   for e in meta.get("files", [])
+                   if e.get("type") == "image/svg+xml")
+    q = query.lower()
+    print(json.dumps([n for n in names if q in n], indent=1))
 
 def insert(pptx, slide_index, path, left, top, width=None, color=None):
     from pptx import Presentation
     from pptx.util import Inches
-    if path.startswith("lucide:"):
-        path = resolve_lucide(path.partition(":")[2])
     if path.endswith(".svg"):
         path = svg_to_png(path, color=color)
     prs = Presentation(pptx)
@@ -85,27 +91,20 @@ def insert(pptx, slide_index, path, left, top, width=None, color=None):
     prs.save(pptx)
     print(f"inserted {path} into slide {slide_index}")
 
-
-def main(argv):
-    if not argv or argv[0] in ("-h", "--help"):
-        print(__doc__)
-        return
-    cmd = argv[0]
+if __name__ == "__main__":
+    cmd = sys.argv[1]
     if cmd == "list":
-        list_dir(argv[1])
+        list_dir(sys.argv[2])
     elif cmd == "lucide":
-        print(resolve_lucide(argv[1]))
+        sub = sys.argv[2]
+        if sub == "fetch":
+            lucide_fetch(sys.argv[3])
+        elif sub == "search":
+            lucide_search(" ".join(sys.argv[3:]))
+        else:
+            print(__doc__)
     elif cmd == "insert":
-        args = argv[1:]
-        color = None
-        if "--color" in args:
-            i = args.index("--color")
-            color = args[i + 1]
-            args = args[:i] + args[i + 2:]
-        insert(*args, color=color)
+        # insert <pptx> <slide> <path> <left> <top> [width] [colorRRGGBB]
+        insert(*sys.argv[2:])
     else:
         print(__doc__)
-
-
-if __name__ == "__main__":
-    main(sys.argv[1:])
