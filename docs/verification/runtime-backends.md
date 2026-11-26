@@ -3860,3 +3860,27 @@ Real Herdr.app exercise on 2026-11-02: the official herdr-app 0.1.11 bundle (sha
 - A spawn with a real harness rather than the stand-in.
 - `send --wait`'s `started`/`working` proof against a real status-reporting harness; the lab run covered a non-reporting shell, whose verdict falls to the composer screen.
 - Native `status.state` reported by a real harness launched through `bin/fm-spawn.sh`.
+
+## safe-agent (OpenShell sandbox)
+
+Measured on 2026-11-26 with OpenShell 0.1.10 (CLI and gateway binaries from the launcher's validated install; gateway on 127.0.0.1:17670 reporting connected, colima profile `safe-agent` on docker) on macOS (Darwin, arm64). The adapter restore follows the four mimo-restore commits' shape; the archived sandbox dispatch backend (`feat(backends): wire the experimental sandbox dispatch backend end to end`) is the isolation reference, re-expressed as a standard harness launcher per the captain's 2026-11-26 ruling.
+
+### Live facts the adapter depends on
+
+| Probe | Result |
+| --- | --- |
+| `openshell --version` (0.1.10 prefix install) | Prints `0.1.10`; the adapter's binary gate requires this shape at or above 0.1.10. The homebrew CLI (0.1.7) fails the floor, which is why verify checks the version, not just presence. |
+| Gateway state from the launcher's state dir | `Status: connected`, `Gateway: safe-agent`; a state naming a different gateway is refused instead of launching on it. |
+| `sandbox exec` session lifetime | Exec sessions survive client disconnects (the launcher's documented posture), so a pane close never stops the crew; `openshell sandbox delete` is the stop primitive. |
+| Launcher on PATH | `safe-agent` was NOT resolvable from a treehouse worktree session's PATH on this machine; the adapter's verify refuses with the concrete install remediation rather than half-launching. The adapter is usable the moment the operator's PATH resolves the launcher's prefix bin dir. |
+
+### Portable regression
+
+`tests/fm-safe-agent-harness.test.sh` (2026-11-26) passed 23 checks against a fake `openshell` and the standard fake pane, covering: the version floor comparison and suffix tolerance; home-scoped sandbox naming with the distinguishing hash; mount-JSON escaping and control-character refusal; verify's four refusals (missing CLI, below-floor version, disconnected gateway, foreign gateway) plus the accept path; launch create/upload/boot with the four binds and task env; the missing-boot-record refusal; persisted-sandbox reattach without a second create; idempotent stop; gateway-blind `state` reporting `missing`; the spawn surface (boot-record write with the UTC timestamp line, role overlay in both boot record and launch brief, `harness=safe-agent` meta, driver dispatch with substituted placeholders, model/effort refusals, secondmate refusal, preflight refusal when the install is unusable); the exchange busy source's last-line authority and output-growth precedence; the byte-offset status mirror; the inbox redirect into the exchange; control's supported-family/kind matrix with refused interrupt and exit verbs; and the corroborated marker outranking the delegate runtime's `MIMOCODE=1` in `bin/fm-harness.sh`.
+
+Two fixes the suite forced, both live-verified through it: the spawn readiness gate reads its pre-launch baseline size before the pane launch (a fast pane or a relaunch against a live exchange otherwise appends `running` before a late baseline read and reads as no-growth), and `detect_own` lets the corroborated `FM_SAFE_AGENT_HARNESS`+`SAFE_AGENT_CREW_TASK` pair outrank the genuine mimo ancestry the delegate runtime creates inside the sandbox.
+
+### Not verified
+
+- A real crew launch end to end on this machine (blocked by the operator PATH gap above); the create/upload/exec sequence is exercised through the fake CLI only.
+- The delegate runtime's behavior inside a live sandbox (permission profile, git through the gitcommon bind against a real remote).

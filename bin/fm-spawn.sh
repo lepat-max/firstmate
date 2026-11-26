@@ -8133,6 +8133,19 @@ if [ "$LAUNCH_ENV_ENABLED" = 1 ]; then
   fi
   LAUNCH="$LAUNCH_ENV_PREFIX /bin/sh -c $(shell_quote "$LAUNCH")"
 fi
+# The safe-agent launch-then-confirm gate (below) proves the crew started by
+# the exchange status record GROWING past its pre-launch size, so the baseline
+# is read here, before the pane launch: a fast pane (or a relaunch against a
+# live exchange) would otherwise append its `running` line before a late
+# baseline read and be judged as no-growth.
+SA_BASE_SIZE=0
+if [ "$HARNESS" = safe-agent ] && [ "$RAW_LAUNCH" -eq 0 ]; then
+  SA_STATUS_FILE=$("$FM_ROOT/bin/fm-safe-agent-crew.sh" config-get EXCHANGE_ROOT 2>/dev/null)/$W/status
+  if [ -f "$SA_STATUS_FILE" ]; then
+    SA_BASE_SIZE=$(wc -c <"$SA_STATUS_FILE" | tr -d '[:space:]')
+  fi
+  case "$SA_BASE_SIZE" in ''|*[!0-9]*) SA_BASE_SIZE=0 ;; esac
+fi
 if [ "$BACKEND" = t3code ]; then
   # No pane: the launch is the thread's first message, carrying the same
   # encoded brief the LAUNCH template embeds; MODEL/EFFORT were fixed as the
@@ -8358,15 +8371,12 @@ if [ "$HARNESS" = safe-agent ] && [ "$RAW_LAUNCH" -eq 0 ]; then
   # uploads, and boot exec all succeeded, so a status-line APPEND is positive
   # proof the crew started. The pane alone cannot prove it - the exec session
   # survives a pane close, and a driver refusal only prints into the pane -
-  # so the gate waits for the record to grow past its pre-launch size and
-  # the new last line to name a boot state (a resume reattach writes a fresh
-  # `running` the same way). The baseline size read is best effort: a record
-  # that cannot be sized yet simply starts from zero.
+  # so the gate waits for the record to grow past its pre-launch size (the
+  # SA_BASE_SIZE baseline captured before the pane launch above) and the new
+  # last line to name a boot state (a resume reattach writes a fresh
+  # `running` the same way).
   SA_READY=0
   SA_STATUS_FILE=$("$FM_ROOT/bin/fm-safe-agent-crew.sh" config-get EXCHANGE_ROOT)/$W/status
-  SA_BASE_SIZE=0
-  [ -f "$SA_STATUS_FILE" ] && SA_BASE_SIZE=$(wc -c <"$SA_STATUS_FILE" | tr -d '[:space:]')
-  case "$SA_BASE_SIZE" in ''|*[!0-9]*) SA_BASE_SIZE=0 ;; esac
   for ((SA_POLL = 0; SA_POLL < ${FM_SAFE_AGENT_READY_POLLS:-120}; SA_POLL++)); do
     if [ -f "$SA_STATUS_FILE" ]; then
       SA_SIZE=$(wc -c <"$SA_STATUS_FILE" 2>/dev/null | tr -d '[:space:]')

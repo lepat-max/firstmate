@@ -508,6 +508,15 @@ detect_own() {
   local marker ancestry strength harness pin
   pin=$(supervision_primary_pin) || exit 2
   [ -z "$pin" ] || { echo "$pin"; return; }
+  # The safe-agent sandbox worker genuinely descends from the delegate runtime
+  # (mimo) that executes it inside the sandbox, so a real ancestry says mimo;
+  # the corroborated Firstmate-owned launch marker (boot wrapper marker plus
+  # the driver's task env) is the stronger claim about which adapter launched
+  # the crew and outranks that ancestry.
+  if [ "${FM_SAFE_AGENT_HARNESS:-}" = safe-agent ] && [ -n "${SAFE_AGENT_CREW_TASK:-}" ]; then
+    echo safe-agent
+    return
+  fi
   marker=$(harness_marker)
   ancestry=$(harness_ancestry)
   if [ -z "$ancestry" ]; then
