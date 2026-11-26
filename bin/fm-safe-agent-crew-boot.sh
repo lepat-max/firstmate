@@ -53,6 +53,13 @@
 
 set -eu
 
+# The pane's typed doorbell (the standard inbox ring) lands in the exec pty's
+# input queue, never in a consumer: the boot process reads no stdin, so a
+# typed line is discarded harmlessly (it may echo into the pane and be read
+# by the pane's shell after the exec ends, the ring's documented residual
+# race). The exchange drain is the only steering transport.
+exec 0</dev/null
+
 prog=safe-agent-crew-boot
 label=${1:-}
 resume=${2:-0}

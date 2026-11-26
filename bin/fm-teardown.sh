@@ -4166,6 +4166,17 @@ elif [ "$BACKEND" != orca ] && [ "$BACKEND" != t3code ] && [ "$BACKEND" != herdr
   fm_backend_kill "$BACKEND" "$T" "$(meta_value "$META" zellij_tab_id)" "fm-$ID" \
     || endpoint_close_refusal "$ID" "$BACKEND" "$T" 1 || exit 1
 fi
+if [ "$(meta_value "$META" harness)" = safe-agent ] && [ "$KIND" != secondmate ]; then
+  # The sandbox exec session survives its pane's death (the runtime keeps the
+  # pty session alive across client disconnects), so the pane close above
+  # never stops the crew: the launch driver's stop (an idempotent sandbox
+  # delete) is this harness's crew-stop primitive. A gateway that cannot
+  # answer refuses rather than claiming stopped - see the driver's contract.
+  if ! "$SCRIPT_DIR/fm-safe-agent-crew.sh" stop "fm-$ID"; then
+    echo "error: could not stop the safe-agent sandbox for $ID; the crew may still be running - remove it with 'openshell sandbox delete' (the sandbox name is in the task exchange dir's sandbox-name record) before retrying teardown" >&2
+    exit 1
+  fi
+fi
 if [ "$KIND" != secondmate ]; then
   if ! FM_HOME="$FM_HOME" FM_STATE_OVERRIDE="$STATE" FM_DATA_OVERRIDE="$DATA" \
       "$SCRIPT_DIR/fm-inactive-reconcile.sh" report "$ID"; then

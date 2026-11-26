@@ -4444,6 +4444,20 @@ EOF
   # hook land seconds apart, and reporting them as separate actionable wakes
   # costs a full firstmate turn each. The re-scan also picks up a newer
   # signature for an already-pending file (last write wins below).
+  # safe-agent crews write their status into the launcher-owned exchange
+  # record, which the wake plane cannot see: fold each task's exchange status
+  # into the host-side status log first, so the scan below reads the same
+  # plane for every harness. The mirror is per-task and best effort
+  # (bin/fm-busy-lib.sh); every unreadable input is a quiet no-op because the
+  # next cycle retries.
+  if command -v fm_busy_safe_agent_status_mirror >/dev/null 2>&1; then
+    for mirror_meta in "$STATE"/*.meta; do
+      [ -e "$mirror_meta" ] || continue
+      mirror_id=${mirror_meta##*/}
+      mirror_id=${mirror_id%.meta}
+      fm_busy_safe_agent_status_mirror "$mirror_id" "$STATE" || true
+    done
+  fi
   reconcile_overdue_pauses
   pending=$(scan_signals)
   if [ -n "$pending" ]; then

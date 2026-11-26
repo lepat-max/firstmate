@@ -8352,6 +8352,43 @@ if [ "$HARNESS" = polytoken ] && [ "$RAW_LAUNCH" -eq 0 ]; then
     exit 1
   fi
 fi
+if [ "$HARNESS" = safe-agent ] && [ "$RAW_LAUNCH" -eq 0 ]; then
+  # The launch-then-confirm gate: the boot wrapper appends `running` (or
+  # `failed`) to the exchange status record only after the sandbox create,
+  # uploads, and boot exec all succeeded, so a status-line APPEND is positive
+  # proof the crew started. The pane alone cannot prove it - the exec session
+  # survives a pane close, and a driver refusal only prints into the pane -
+  # so the gate waits for the record to grow past its pre-launch size and
+  # the new last line to name a boot state (a resume reattach writes a fresh
+  # `running` the same way). The baseline size read is best effort: a record
+  # that cannot be sized yet simply starts from zero.
+  SA_READY=0
+  SA_STATUS_FILE=$("$FM_ROOT/bin/fm-safe-agent-crew.sh" config-get EXCHANGE_ROOT)/$W/status
+  SA_BASE_SIZE=0
+  [ -f "$SA_STATUS_FILE" ] && SA_BASE_SIZE=$(wc -c <"$SA_STATUS_FILE" | tr -d '[:space:]')
+  case "$SA_BASE_SIZE" in ''|*[!0-9]*) SA_BASE_SIZE=0 ;; esac
+  for ((SA_POLL = 0; SA_POLL < ${FM_SAFE_AGENT_READY_POLLS:-120}; SA_POLL++)); do
+    if [ -f "$SA_STATUS_FILE" ]; then
+      SA_SIZE=$(wc -c <"$SA_STATUS_FILE" 2>/dev/null | tr -d '[:space:]')
+      case "$SA_SIZE" in ''|*[!0-9]*) SA_SIZE=0 ;; esac
+      if [ "$SA_SIZE" -gt "$SA_BASE_SIZE" ]; then
+        case "$(tail -n 1 "$SA_STATUS_FILE" 2>/dev/null)" in
+          running* | failed*) SA_READY=1; break ;;
+        esac
+      fi
+    fi
+    sleep "${FM_SAFE_AGENT_POLL_INTERVAL:-1}"
+  done
+  if [ "$SA_READY" != 1 ]; then
+    printf '%s\n' "$(status_stamp_line "failed: safe-agent crew did not report running in window $T")" >>"$STATE/$ID.status"
+    echo "error: the safe-agent crew did not reach its boot run in $T; inspect the pane and the task exchange dir's output record" >&2
+    rovo_endpoint_cleanup
+    # The sandbox survives a pane close, so the crew-stop primitive runs here
+    # too; a gateway that cannot answer leaves the sandbox for teardown.
+    "$FM_ROOT/bin/fm-safe-agent-crew.sh" stop "$W" 2>/dev/null || true
+    exit 1
+  fi
+fi
 
 if [ "$KIND" = secondmate ] && [ "${FM_SKIP_SECONDMATE_INHERIT:-0}" != 1 ]; then
   if ! fm_config_reread_discard_pending "$PROJ_ABS" "$ID" "$FM_HOME"; then

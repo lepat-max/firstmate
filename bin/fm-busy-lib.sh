@@ -1119,6 +1119,94 @@ fm_busy_launch_prompt_parked() {  # <harness>
   esac
 }
 
+# fm_busy_safe_agent_driver_source: the safe-agent harness's exchange-root
+# read comes from the launch driver (bin/fm-safe-agent-crew.sh, source-safe:
+# sourced it only defines fm_safe_agent_* functions), which resolves the
+# launcher bootstrap's env file exactly the way the launch did - so the busy
+# source can never disagree with the launch about where the records live.
+fm_busy_safe_agent_driver_source() {
+  command -v fm_safe_agent_config_get >/dev/null 2>&1 && return 0
+  # shellcheck source=bin/fm-safe-agent-crew.sh
+  . "${BASH_SOURCE[0]%/*}/fm-safe-agent-crew.sh"
+}
+
+# fm_busy_safe_agent_exchange: the safe-agent harness's semantic busy source,
+# read from the exchange records the boot wrapper and worker write host-side
+# (the launcher owns the exchange root; the driver's configuration carries
+# it). The status record is append-only and its LAST line is authoritative:
+# the boot wrapper writes `<state> <utc>` lines (running/done/failed) while
+# the worker appends `<state> [at=<epoch>]: ...` lines, so the last line's
+# first field names the current state. A run still producing output after the
+# last status write is busy whatever the line says - output growth is
+# positive proof of work in flight, and it covers a wrapper state line the
+# worker has not yet superseded. A task whose meta does not name this
+# harness, or any unreadable record, is unknown (return 1), never idle.
+fm_busy_safe_agent_exchange() {  # <id> <state-dir>
+  local id=$1 state=$2 meta exchange_root dir line state_token
+  meta="$state/$id.meta"
+  [ -f "$meta" ] && [ ! -L "$meta" ] || return 1
+  [ "$(LC_ALL=C grep -c '^harness=safe-agent$' "$meta" 2>/dev/null || true)" = 1 ] || return 1
+  fm_busy_safe_agent_driver_source 2>/dev/null || return 1
+  exchange_root=$(fm_safe_agent_config_get EXCHANGE_ROOT 2>/dev/null) || return 1
+  [ -n "$exchange_root" ] || return 1
+  dir="$exchange_root/fm-$id"
+  [ -f "$dir/status" ] || return 1
+  if [ -f "$dir/output.log" ] && [ "$dir/output.log" -nt "$dir/status" ]; then
+    printf 'busy'
+    return 0
+  fi
+  line=$(tail -n 1 "$dir/status" 2>/dev/null) || return 1
+  state_token=${line%%[[:space:]]*}
+  case "$state_token" in
+    running|working|blocked|needs-decision|paused)
+      printf 'busy'
+      ;;
+    done|failed)
+      printf 'idle'
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+# fm_busy_safe_agent_status_mirror: fold the exchange status record into the
+# host-side state/<id>.status so the watcher's wake plane sees safe-agent
+# worker state changes without backend polling. Byte-offset based against the
+# exchange file: only newly appended bytes are appended to the host status
+# log, and a shrink (a relocated exchange root resets the record) resets the
+# offset so the replacement content is mirrored too. Best effort by
+# contract: every unreadable or missing input is a quiet no-op, because the
+# next watch cycle simply retries.
+fm_busy_safe_agent_status_mirror() {  # <id> <state-dir>
+  local id=$1 state=$2 meta exchange_root src dst offset_file offset size
+  meta="$state/$id.meta"
+  [ -f "$meta" ] && [ ! -L "$meta" ] || return 0
+  [ "$(LC_ALL=C grep -c '^harness=safe-agent$' "$meta" 2>/dev/null || true)" = 1 ] || return 0
+  fm_busy_safe_agent_driver_source 2>/dev/null || return 0
+  exchange_root=$(fm_safe_agent_config_get EXCHANGE_ROOT 2>/dev/null) || return 0
+  [ -n "$exchange_root" ] || return 0
+  src="$exchange_root/fm-$id/status"
+  [ -f "$src" ] || return 0
+  dst="$state/$id.status"
+  offset_file="$state/$id.exchange-status-offset"
+  offset=$(cat "$offset_file" 2>/dev/null || true)
+  case "$offset" in ''|*[!0-9]*) offset=0 ;; esac
+  # wc(1) pads its count with spaces on BSD hosts, so the whitespace is
+  # stripped before the digit validation; an empty result (a failed wc)
+  # still takes the quiet no-op below.
+  size=$(wc -c <"$src" 2>/dev/null | tr -d '[:space:]') || return 0
+  case "$size" in ''|*[!0-9]*) return 0 ;; esac
+  if [ "$size" -lt "$offset" ]; then
+    offset=0
+  fi
+  if [ "$size" -gt "$offset" ]; then
+    tail -c "+$((offset + 1))" "$src" >>"$dst" 2>/dev/null || return 0
+    printf '%s\n' "$size" >"$offset_file" 2>/dev/null || return 0
+  fi
+  return 0
+}
+
 # fm_busy_classify: semantic classification for a task whose endpoint the
 # caller has already established as present. Prints "<verdict> <source>":
 # busy|idle|unknown plus the producing source (see header). Never probes
@@ -1130,7 +1218,7 @@ fm_busy_launch_prompt_parked() {  # <harness>
 # at the fm-spawn seed keeps reading busy fm-spawn, unchanged.
 fm_busy_classify() {  # <backend> <target> <harness> <id> <state-dir> [tail40]
   local backend=$1 target=$2 harness=$3 id=$4 state=$5 tail40=${6-}
-  local out rc r_state r_source native log
+  local out rc r_state r_source native log verdict
   # t3code first: the T3 server reports the session status for claude and
   # codex alike. Native uncertainty must not fall through to a stale idle
   # record or a harness-specific fallback.
@@ -1142,6 +1230,18 @@ fm_busy_classify() {  # <backend> <target> <harness> <id> <state-dir> [tail40]
         return 0
         ;;
     esac
+  fi
+  # The safe-agent harness is exchange-driven like t3code is server-driven:
+  # its semantic verdict comes from the exchange records, not from the status
+  # log a pane harness would write, so it takes the same early precedence
+  # before the record read.
+  if [ "$harness" = safe-agent ] && command -v fm_busy_safe_agent_exchange >/dev/null 2>&1; then
+    if verdict=$(fm_busy_safe_agent_exchange "$id" "$state" 2>/dev/null); then
+      printf '%s safe-agent-exchange' "$verdict"
+    else
+      printf 'unknown safe-agent-exchange'
+    fi
+    return 0
   fi
   case "$harness" in
     kimi*)
