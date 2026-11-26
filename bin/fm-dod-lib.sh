@@ -381,6 +381,35 @@ EOF
   printf '%s\n' "$1"
 }
 
+# fm_brief_safe_agent_worker_overlay owns the sandboxed-variant worker role for
+# a crew dispatched on the safe-agent harness. The driver delivers the brief as
+# the sandbox boot prompt, so every host-side plumbing a generated brief names
+# - the firstmate home's state status file, the steering inbox, and the host
+# scripts that read them - does not exist inside the sandbox. bin/fm-spawn.sh
+# is its one emitter, written into the launch brief ahead of the boot-record
+# write. Like fm_brief_worker_role it is a distinctly titled launch section
+# that states its own precedence, so brief instructions naming host scripts
+# are superseded rather than contradicted. Nothing here hardcodes the exchange
+# root: every path is expressed through the in-sandbox env the driver sets at
+# create time, so the same text survives an exchange-root relocation.
+fm_brief_safe_agent_worker_overlay() {
+  cat <<'EOF'
+
+# Sandboxed crew role overlay
+You are a crewmate running inside a sandbox that firstmate manages.
+This section supersedes every brief instruction that points at the firstmate host: no path under the firstmate home, firstmate script, or forge tool named elsewhere in the brief is reachable from inside this sandbox.
+Your task label is `$SAFE_AGENT_CREW_TASK` and your task worktree is the current directory (`/sandbox/worktree/$SAFE_AGENT_CREW_TASK`).
+Your task exchange dir is `${SAFE_AGENT_CREW_TASK_ROOT:-/sandbox/exchange}/$SAFE_AGENT_CREW_TASK`; it carries your task records, and paths into it are the only firstmate-side paths you can reach.
+Report status by appending the ordinary firstmate status line - `<state> [at=<epoch>]: <one short line>`, with `<epoch>` taken from `date +%s` - to the end of the `status` record in your task exchange dir.
+Append after the `running` line the boot process wrote; never truncate or rewrite that record, because firstmate reads it incrementally.
+The states are working/needs-decision/blocked/paused/done/failed: a decision above your implementation level is a `needs-decision` line naming the options, a repeated obstacle is a `blocked` line naming why, and either closes with a `resolved [at=<epoch>]:` line naming the same key.
+Steering arrives through the `inbox` dir of your task exchange dir, which the boot process drains into follow-up runs between your turns; there is no `fm-send` and no keystroke channel to answer through, so your status lines are your only reply plane.
+Never run firstmate host scripts - `fm-captain-hold.sh`, `fm-send.sh`, `fm-teardown.sh`, the no-mistakes pipeline, `gh-axi`, or the fleet-ledger tail - because none of them exist inside this sandbox.
+Never push to any remote and never open a pull request; publish nothing outside your task worktree and its exchange dir.
+When the brief names a deliverable outside the worktree, deliver it as a file inside the task worktree instead and say so in a status line, so firstmate can pick it up.
+EOF
+}
+
 # Accept the current two-subsection contract only when both bodies have content;
 # briefs predating that contract remain valid when their # Task body has content.
 fm_brief_task_content_valid() {  # <file>
