@@ -64,7 +64,7 @@ fm_control_verb_allowed() {  # <verb>
 # section 4's verified-adapter list; an unverified adapter is refused rather
 # than guessed at, exactly as a spawn on it would be.
 fm_control_harnesses() {
-  printf '%s\n' claude codex opencode pi pi-signed grok kimi cursor gemini muse rovo omp agy devin commandcode polytoken cortex kiro hermes mimo
+  printf '%s\n' claude codex opencode pi pi-signed grok kimi cursor gemini muse rovo omp agy devin commandcode polytoken cortex kiro hermes mimo safe-agent
 }
 
 fm_control_harness_supported() {  # <harness>
@@ -106,12 +106,13 @@ fm_control_harness_family() {  # <recorded-harness>
     muse*) printf 'muse' ;;
     rovo*) printf 'rovo' ;;
     mimo*) printf 'mimo' ;;
+    safe-agent) printf 'safe-agent' ;;
     *) return 1 ;;
   esac
 }
 
 # Which task kinds an adapter is verified to run. muse, gemini, rovo, devin,
-# commandcode, polytoken, cortex, kiro, and mimo are crewmate/scout adapters only: none has a primary
+# commandcode, polytoken, cortex, kiro, mimo, and safe-agent are crewmate/scout adapters only: none has a primary
 # supervision protocol, and bin/fm-spawn.sh refuses a --secondmate launch on any of them. The control
 # plane asks this BEFORE it stops anything, so an incompatible relaunch target is
 # refused while the current agent is still running rather than after it has
@@ -121,7 +122,7 @@ fm_control_harness_supports_kind() {  # <harness> <kind>
   fm_control_harness_supported "$harness" || return 1
   case "$harness" in
     hermes) case "$kind" in ship|scout) ;; *) return 1 ;; esac ;;
-    muse|gemini|rovo|devin|commandcode|polytoken|cortex|kiro|mimo) [ "$kind" != secondmate ] || return 1 ;;
+    muse|gemini|rovo|devin|commandcode|polytoken|cortex|kiro|mimo|safe-agent) [ "$kind" != secondmate ] || return 1 ;;
   esac
   return 0
 }

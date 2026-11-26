@@ -156,6 +156,30 @@ fm_task_inbox_clear_busy() {  # <state-dir> <task-id>
 }
 
 fm_task_inbox_dir() {  # <state-dir> <task-id>
+  # The safe-agent harness relocates the task inbox into the exchange root
+  # the launcher owns: the boot wrapper drains <exchange>/<label>/inbox, and
+  # the label is the task's own fm-<id>, so the redirect needs only the
+  # record's harness line plus the launch driver's configured exchange root
+  # (bin/fm-safe-agent-crew.sh, source-safe: sourced it only defines
+  # fm_safe_agent_* functions - the same resolution the launch used, so the
+  # redirect can never disagree with it). Everything else keeps the classic
+  # <state>/<id>.inbox shape, and a record whose harness line is missing,
+  # ambiguous, or whose driver or configuration is unreadable falls back
+  # there rather than guessing at an exchange path.
+  local meta exchange_root
+  meta="$1/$2.meta"
+  if [ -f "$meta" ] && [ ! -L "$meta" ] \
+    && [ "$(LC_ALL=C grep -c '^harness=safe-agent$' "$meta" 2>/dev/null || true)" = 1 ]; then
+    if [ -f "${BASH_SOURCE[0]%/*}/fm-safe-agent-crew.sh" ]; then
+      # shellcheck source=bin/fm-safe-agent-crew.sh
+      . "${BASH_SOURCE[0]%/*}/fm-safe-agent-crew.sh"
+      exchange_root=$(fm_safe_agent_config_get EXCHANGE_ROOT 2>/dev/null) || exchange_root=
+      if [ -n "$exchange_root" ] && [ "$exchange_root" != / ]; then
+        printf '%s/fm-%s/inbox' "$exchange_root" "$2"
+        return 0
+      fi
+    fi
+  fi
   printf '%s/%s.inbox' "$1" "$2"
 }
 
